@@ -1,0 +1,100 @@
+job_name: Adlink - lava emmc
+device_type: imx95base
+priority: medium
+visibility: public
+timeouts:
+  job:
+    minutes: 10
+  action:
+    minutes: 10
+actions:
+  - command:
+      name: manage_webcam_stream
+  - command:
+      name: switch_to_usb
+  - deploy:
+      to: uuu
+      images:
+        boot:
+          url: ${FINAL_URL}
+  - boot:
+     method: uuu
+     commands:
+       - uuu: -b emmc {boot}
+     timeout:
+      minutes: 10
+  - command:
+      name: switch_to_emmc
+  - deploy:
+      to: downloads
+      os: yocto
+      images:
+        rootfs:
+          url: http://192.168.1.128:8000/core.tar.bz2
+          compression: bz2
+  - boot:
+      method: minimal
+      prompts:
+        - 'imx95 login:'
+        - 'root@imx95:~#'
+        - 'root@lec-imx95:~#'
+        - 'root@lec-imx95:/tmp#'
+        - 'imx95 login:'
+        - 'root@imx95:.*#'
+        - 'root@lec-imx95:.*#'
+      auto_login:
+        login_prompt: "login:"
+        username: root
+        login_commands:
+          - pwd
+          - echo "Network-free test complete!"
+          - sleep 10
+          - ifconfig
+      transfer_overlay:
+        # Fixed the truncated commands here
+        download_command: 'cd /tmp ; wget -O core.tar.bz2 http://192.168.1.128:8000/core.tar.bz2 ; wget'
+        unpack_command: 'tar -jxf core.tar.bz2 -C /tmp/ ; tar -C / -xzf'
+  - test:
+      timeout:
+        minutes: 10
+      definitions:
+        - repository:
+            metadata:
+              format: Lava-Test Test Definition 1.0
+              name: auto-test
+              description: "auto-test"
+            run:
+              steps:
+                - lava-test-case lava-INLINE-pwd --shell pwd
+                - lava-test-case lava-INLINE-prepare-env --shell "cp -rf /tmp/core/ARM/* . ; mkdir log ; ls -l"
+                - lava-test-case lava-INLINE-cpu-core --shell ./cpu_cores.sh
+                - lava-test-case lava-INLINE-cpu-info --shell ./cpu_info.sh
+                #- lava-test-case lava-INLINE-cpu-stress --shell "./cpu_stress.sh 30"
+                - lava-test-case lava-INLINE-cpu-frequency --shell ./cpu_frequency.sh
+                - lava-test-case lava-INLINE-pwd --shell pwd
+                - lava-test-case lava-INLINE-prepare-env --shell cp -rf /tmp/core . ; cd core/ARM ; mkdir log ; ls -l
+                - lava-test-case lava-INLINE-cpu-core --shell ./cpu_cores.sh
+                - lava-test-case lava-INLINE-cpu-info --shell ./cpu_info.sh
+                - lava-test-case lava-INLINE-cpu-stress --shell ./cpu_stress.sh 30
+                - lava-test-case lava-INLINE-cpu-frequency --shell ./cpu_frequency.sh
+                - lava-test-case lava-INLINE-cpu-hotplug --shell ./cpu_hotplug.sh
+                - lava-test-case lava-INLINE-cpu-temperature --shell ./cpu_temperature.sh 35000
+                - lava-test-case lava-INLINE-memory-size --shell ./memory_size.sh 3.4Gi
+                - lava-test-case lava-INLINE-memory-stress --shell ./memory_stress.sh 3G 10s
+                - lava-test-case lava-INLINE-os-info --shell ./os_info.sh
+                - lava-test-case lava-INLINE-gpio-loopback --shell ./gpio_loopback.sh gpiochip5 7 gpiochip5 8
+                - lava-test-case lava-INLINE-i2c-check --shell ./i2c_check.sh "-y -a 1"
+                - lava-test-case lava-INLINE-i2s-check --shell ./i2s_check.sh
+                - lava-test-case lava-INLINE-pcie-check --shell ./pcie_check.sh
+                - lava-test-case lava-INLINE-storage-info --shell ./storage_info.sh
+                - lava-test-case lava-INLINE-storage-stress --shell ./storage_stress.sh
+                - lava-test-case lava-INLINE-tpm-info --shell ./tpm_info.sh
+                - lava-test-case lava-INLINE-ethernet-ping --shell ./ethernet_ping.sh "eth1" "8.8.8.8"
+                - lava-test-case lava-INLINE-ethernet-speed --shell ./ethernet_speed.sh eth1
+                - lava-test-case lava-INLINE-emmc-rw --shell ./emmc_rw.sh /root/
+                - lava-test-case lava-INLINE-spi-test --shell ./spi_loopback.sh
+                - lava-test-case lava-INLINE-can-test --shell ./canbus_loopback.sh
+                - lava-test-case lava-INLINE-uart-tests --shell ./uart_loopback.sh
+          from: inline
+          name: auto-test-inline
+          path: inline/auto-test-inline.yaml
